@@ -1,0 +1,37 @@
+name: SlipGate Scan Cycle
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install xray-core
+        run: |
+          curl -L -o xray.zip https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-linux-64.zip
+          sudo unzip -o xray.zip -d /usr/local/bin xray
+          sudo chmod +x /usr/local/bin/xray
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run one scan cycle
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
+          SOURCE_CHANNELS: ${{ secrets.SOURCE_CHANNELS }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          TARGET_CHANNEL: ${{ vars.TARGET_CHANNEL }}
+          OWN_CHANNEL_TAG: ${{ vars.TARGET_CHANNEL }}
+        run: python -m src.main --once

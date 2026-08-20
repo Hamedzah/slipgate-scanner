@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  slipgate:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "9090:9090"  # Prometheus metrics
+    restart: unless-stopped
+
+  # Optional local Postgres for production-style testing.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: slipgate
+      POSTGRES_PASSWORD: slipgate
+      POSTGRES_DB: slipgate
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    profiles: ["postgres"]
+
+volumes:
+  pg_data:

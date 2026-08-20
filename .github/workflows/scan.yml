@@ -30,6 +30,10 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Prepare data directory
+        run: |
+          mkdir -p data logs
+
       - name: Run one scan cycle
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
@@ -39,14 +43,15 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           TARGET_CHANNEL: ${{ secrets.TARGET_CHANNEL }}
           OWN_CHANNEL_TAG: ${{ secrets.OWN_CHANNEL_TAG }}
+          DATABASE_URL: "sqlite:///data/scanner.db"
         run: python -m src.main --once
 
-      - name: Upload logs (if any)
+      - name: Upload logs and database
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: scan-logs-${{ github.run_id }}
+          name: scan-results-${{ github.run_id }}
           path: |
             logs/
-            *.log
-          retention-days: 3
+            data/
+          retention-days: 7

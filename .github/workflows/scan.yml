@@ -9,13 +9,10 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -26,13 +23,7 @@ jobs:
           sudo chmod +x /usr/local/bin/xray
 
       - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Prepare data directory
-        run: |
-          mkdir -p data logs
+        run: pip install -r requirements.txt
 
       - name: Run one scan cycle
         env:
@@ -41,17 +32,6 @@ jobs:
           TG_SESSION_STRING: ${{ secrets.TG_SESSION_STRING }}
           SOURCE_CHANNELS: ${{ secrets.SOURCE_CHANNELS }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          TARGET_CHANNEL: ${{ secrets.TARGET_CHANNEL }}
-          OWN_CHANNEL_TAG: ${{ secrets.OWN_CHANNEL_TAG }}
-          DATABASE_URL: "sqlite:///data/scanner.db"
+          TARGET_CHANNEL: ${{ vars.TARGET_CHANNEL }}
+          OWN_CHANNEL_TAG: ${{ vars.TARGET_CHANNEL }}
         run: python -m src.main --once
-
-      - name: Upload logs and database
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scan-results-${{ github.run_id }}
-          path: |
-            logs/
-            data/
-          retention-days: 7

@@ -9,18 +9,62 @@ project's security requirements.
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.logging_config import get_logger
 from src.security.crypto import SecretBox
 from src.storage.models import Base, BroadcastLog, ConfigRecord, TestResultRecord
+
+logger = get_logger(__name__)
+
+
+def _ensure_async_driver(database_url: str) -> str:
+    """Normalize a DATABASE_URL to guarantee an async-capable driver.
+
+    Operators sometimes set DATABASE_URL to a bare `sqlite:///...` or
+    `postgresql://...` (e.g. copied from a non-async tool). SQLAlchemy's
+    asyncio extension requires an explicit async driver
+    (`sqlite+aiosqlite://`, `postgresql+asyncpg://`), or it raises
+    `InvalidRequestError: ... is not async`. Rather than crash on an easy
+    mistake, upgrade the URL automatically and log that we did so.
+    """
+    if database_url.startswith("sqlite:///") and "+aiosqlite" not in database_url:
+        fixed = database_url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+        logger.warning("database_url_missing_async_driver", original=database_url, fixed=fixed)
+        return fixed
+    if database_url.startswith("postgresql://") and "+asyncpg" not in database_url:
+        fixed = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        logger.warning("database_url_missing_async_driver", original=database_url, fixed=fixed)
+        return fixed
+    return database_url
+
+
+def _ensure_sqlite_parent_dir(database_url: str) -> None:
+    """Create the parent directory for a SQLite file DB if it doesn't exist yet.
+
+    On a fresh GitHub Actions checkout, `data/` may not exist unless it was
+    committed (e.g. via a `.gitkeep`); SQLite will not create missing
+    parent directories on its own and instead fails with an obscure
+    "unable to open database file" error.
+    """
+    if "sqlite" not in database_url:
+        return
+    # Strip the driver prefix and any leading slashes used for relative paths.
+    path_part = database_url.split("///", 1)[-1]
+    if not path_part or path_part == ":memory:":
+        return
+    Path(path_part).parent.mkdir(parents=True, exist_ok=True)
 
 
 class Database:
     """Owns the engine/sessionmaker and exposes repository operations."""
 
     def __init__(self, database_url: str, secret_box: SecretBox) -> None:
+        database_url = _ensure_async_driver(database_url)
+        _ensure_sqlite_parent_dir(database_url)
         self._engine = create_async_engine(database_url, future=True)
         self._sessionmaker = async_sessionmaker(self._engine, expire_on_commit=False)
         self._secret_box = secret_box
